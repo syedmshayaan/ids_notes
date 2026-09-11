@@ -1,0 +1,75 @@
+Starting the hotspot (live mode only):
+---------------------------------------
+	> sudo nmcli device wifi hotspot ifname wlp0s20f0u1 ssid "IDS-Demo" password "ids12345"
+	
+	This turns your TP-Link USB NIC into a WiFi hotspot called IDS-Demo. Laptop 2 connects to this. All of Laptop 2's traffic now physically flows through your machine.
+
+Phase 1 - Capture:
+------------------
+	> python3 -m capture.sniffer data/Friday.pcap
+
+	Reads the CICIDS2017 Friday pcap file packet by packet. For each packet it pulls out source IP, destination IP, ports, protocol, size, TCP flags. Saves all of it to captures/traffic.csv. Also watches for SYN floods using the handshake tracker.
+
+	> sudo python3 live.py
+	
+	Same thing but live — reads packets off the wlp0s20f0u1 interface in real time instead of a file. Also starts preprocessing, ML prediction, and the dashboard all at once in background threads.
+
+Phase 2 - Preprocessing:
+------------------------
+	> python3 -m preprocessing.cleaner
+
+	Reads captures/traffic.csv. Removes garbage rows — missing IPs, non TCP/UDP traffic, multicast addresses. Converts TCP flags from strings like "SA" into binary columns — has_syn, has_ack, has_fin, has_rst. Fills missing values with zeros. Saves clean version to captures/processed.csv. Then immediately encrypts it to captures/processed.enc using AES-128. The plain CSV is for immediate use, the encrypted one is for secure storage.
+
+	> python3 -m preprocessing.align_features
+
+	Reads captures/processed.csv. The ML model was trained on CICIDS2017 which has 78 specific column names. Your live capture has different column names. This maps yours to theirs — renames columns, adds missing ones filled with zeros — and saves captures/aligned.csv. Now the data looks exactly like what the model expects.
+
+Phase 3 - Machine Learning:
+----------------------------
+	> python3 -m ml.train
+
+	Reads data/Friday.csv — the official CICIDS2017 dataset with 703,245 labeled rows. Strips the Label column, converts everything to numbers, splits 80% for training and 20% for testing. Trains a Random Forest and a Decision Tree. Saves both to ml/models/ as .pkl files. Also saves the label encoder which converts numbers back to human readable labels like "DDoS" or "BENIGN".
+
+	> python3 -m ml.evaluate
+
+	Loads both saved models. Runs them on the 20% test data they never saw during training. Prints accuracy, precision, recall, and F1 score for each attack class. This is where you see 99.9% accuracy.
+
+	> python3 -m ml.predict
+
+	Loads the trained Random Forest. Reads data/Friday.csv, drops the Label column, runs every row through the model, converts numeric predictions back to labels. Prints how many suspicious packets were found. Saves everything with a prediction column to captures/predictions.csv.
+
+Phase 4 - Sandbox:
+------------------
+
+	> python3 -m sandbox.client
+
+	Test script. Sends two payloads to the EC2 server — one benign (print(1+1)), one malicious (os.system whoami). Prints the verdict for each. Just for testing, not part of the main pipeline.
+
+	> curl http://16.171.148.252:5001/health
+
+	Checks if the EC2 sandbox server is alive. Returns {"status":"ok"} if yes.
+
+Phase 5 — Dashboard:
+--------------------
+	> python3 -m dashboard.app
+
+	Starts the Flask web server on port 5000. Loads the trained model into memory. Starts a background thread that runs every 10 seconds — reads predictions, maps them to packet details, saves to SQLite, sends suspicious ones to EC2 sandbox. Serves the dashboard at http://localhost:5000.
+
+Utility commands:
+------------------
+
+
+	> rm -f captures/traffic.csv captures/processed.csv captures/processed.enc captures/aligned.csv captures/predictions.csv captures/.last_processed_row captures/.last_predicted_row
+	> rm -f dashboard/ids.db
+
+	Wipes all generated data for a clean fresh start.
+
+	> sudo arp -n
+
+	Shows which devices are connected to your hotspot and their IPs.
+
+
+	> git checkout main
+	> git checkout live-capture
+
+	Switches between version 1.1.1 (replay) and version 2.1.1 (live wireless).
