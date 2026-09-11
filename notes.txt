@@ -1,0 +1,46 @@
+------------------------------------------
+|	Live Packet Capture V2.0.0	|
+|					|
+------------------------------------------
+
+Requirements:
+-------------
+
+2 Laptops - L1 & L2
+
+L1 contains - N1 & N2
+N1 - Built in NIC
+N2 - External Wireless Network Adapter
+
+L2 contains N3 (Default NIC)
+
+
+Simulating conversation between 2 systems requires a network.
+For the beta verison launch, using a Hotspot connection to demonstrate the wireless transmittion of packets between the two machines.
+
+Working:
+--------
+	L1 hosts a Hotspot connection on N2.
+	
+	> sudo nmcli device wifi hotspot ifname <interface-name> ssid "IDS-Demo" password "ids12345"
+	
+	This creates a hotspot connection that is hosted on L1 N2.
+	After Hosting the network, L2 is connected to the network "IDS-Demo".
+
+	Verification: > sudo arp -n
+	-------------
+
+	Removing Old Files before starting:
+	------------------------------------
+
+	> rm -f captures/traffic.csv captures/processed.csv captures/processed.enc captures/aligned.csv 
+	> rm -f captures/.last_processed_row captures/.last_predicted_row captures/predictions.csv
+	> rm -f dashboard/ids.db
+
+	Removing these files will refresh the project and clears all the temporary data.
+
+
+	Starting the system:
+	--------------------
+
+		> sudo python3 live.py

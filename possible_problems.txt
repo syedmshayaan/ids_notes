@@ -1,0 +1,84 @@
+Possible problems and fixes
+
+Problem 1 — Hotspot won't start
+
+Error: Device not found
+
+Fix — TP-Link might not be detected. Check:
+
+> ip a
+
+If wlp0s20f0u1 is missing, the TP-Link USB adapter isn't recognised. Replug it and run:
+
+> sudo dmesg | tail -20
+
+Look for the interface name and update the hotspot command.
+
+----------
+
+Problem 2 — Laptop 2 connects but no packets appear
+
+Fix — check the sniffer interface is correct:
+
+> sudo tcpdump -i wlp0s20f0u1 -n
+
+If no packets appear, the sniffer is on the wrong interface. Check capture/live_sniffer.py and make sure INTERFACE = "wlp0s20f0u1".
+
+----------
+
+Problem 3 — Dashboard shows nothing after starting
+
+Fix — predictions take 30 seconds to generate on first run. Wait a full minute before worrying. If still empty after a minute:
+
+> ls -lh captures/
+
+Check if traffic.csv is growing. If it's empty the sniffer isn't capturing. If it has rows but predictions.csv is missing, the ML predictor is failing. Check terminal for errors.
+
+----------
+
+Problem 4 — Sandbox shows ERROR
+
+Fix — EC2 server is down. Check:
+
+bash
+curl http://16.171.148.252:5001/health
+
+If no response, SSH in and restart:
+
+> ssh -i ~/.ssh/ids-key.pem ubuntu@16.171.148.252
+> sudo SANDBOX_API_KEY="ids-secret-key" nohup python3 ~/sandbox/sandbox_server.py > ~/sandbox/server.log 2>&1 &
+
+----------
+
+Problem 5 — sklearn version warning
+
+InconsistentVersionWarning
+
+Fix — retrain the model on the current machine:
+
+> python3 -m ml.train
+
+---------
+
+Problem 6 — Permission denied on captures/
+
+Fix — files owned by root from previous sudo run:
+
+> sudo chmod -R 755 captures/
+> sudo chown -R $USER captures/
+
+----------
+
+Problem 7 — Database locked error
+
+Fix — old db from previous run is corrupted:
+
+> rm dashboard/ids.db
+
+Restart live.py.
+
+Problem 8 — Hotspot disappears after reboot
+
+Fix — recreate it:
+
+> sudo nmcli device wifi hotspot ifname wlp0s20f0u1 ssid "IDS-Demo" password "ids12345"
